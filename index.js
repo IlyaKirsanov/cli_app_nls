@@ -1,34 +1,44 @@
 #!/usr/bin/env node
-
+//in package.json -> "bin": {
+//     "wit": "index.js" //short "watch it"
+//   },
+//chmod +x index.js
+//npm link index.js
+const debouce = require('lodash.debounce');
+const chokidar = require('chokidar');
+const program = require('caporal');
 const fs = require('fs');
-const util = require('util');
+const {spawn} = require('child_process');
 const chalk = require('chalk');
-const path = require('path');
 
-const {lstat} = fs.promises;
+program
+  .version('0.0.1')
+  .argument('[filename]', 'Name of a file to execute')
+  .action(async ({filename}) => {
+    const name = filename || 'index.js';
+  
+    try{
+      await fs.promises.access(name);
+    }catch (e) {
+      throw new Error('Could not find file - ' + name);
+    }
+    
+    let proc;
+    const start =debouce(() =>{
+      if(proc){
+        proc.kill();
+      }
 
-const targerDir = process.argv[2] || process.cwd()
+      console.log(chalk.blue('>>>> Starting process...'));
+      proc = spawn('node', [name], {stdio: 'inherit'});
+    }, 100);
 
-fs.readdir(process.cwd(), async (err, filenames)=>{
-	if(err){
-		throw new Error(err);
-	}	
-	const statPromise = filenames.map(filename=>{
-		return lstat(path.join(targerDir, filename));
-	});
+    chokidar.watch('.')
+      .on('add',start)
+      .on('change',start)
+      .on('unlink',start);
+  });
 
-	const allStats = await Promise.all(statPromise);
-
-	for(let stats of allStats){
-		const index = allStats.indexOf(stats);
-		if(stats.isFile()){
-
-			console.log(filenames[index]);
-		}else{
-			console.log(chalk.bold.red(filenames[index]));
-		}
-	}
-});
-
+program.parse(process.argv);
 
 
